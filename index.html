@@ -30,6 +30,21 @@
   .splash-text span { color:#D93C3C; }
   .splash.hide { opacity: 0; transform: translateY(-70px); pointer-events: none; }
 
+  /* ---- auth gate (full screen, shown before login) ---- */
+  .auth-gate {
+    position: fixed; inset: 0; z-index: 40; display:none;
+    align-items:center; justify-content:center;
+    background:
+      radial-gradient(ellipse 700px 400px at 50% 0%, rgba(217,60,60,0.08), transparent 60%),
+      linear-gradient(180deg, #121214 0%, #0c0c0e 40%, #08080a 100%);
+    padding: 24px;
+  }
+  .auth-gate.show { display:flex; }
+  .auth-card { width:100%; max-width: 380px; }
+  .auth-brand { text-align:center; font-family:'Bebas Neue',sans-serif; font-size: 40px; letter-spacing:4px; color:#F5F1EA; margin-bottom: 8px; }
+  .auth-brand span { color:#D93C3C; }
+  .auth-sub { text-align:center; font-size: 13px; color:#A98787; margin-bottom: 28px; letter-spacing:0.3px; }
+
   /* ---- today view ---- */
   .today-header { text-align:center; margin: 14px 0 30px 0; }
   .today-daynum { font-family:'Bebas Neue',sans-serif; font-size: 104px; color:#F5F1EA; line-height:0.85; }
@@ -286,6 +301,26 @@
 
 <div class="splash" id="splash"><div class="splash-text">STREAK<span>.</span></div></div>
 
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <div class="auth-brand">STREAK<span>.</span></div>
+    <div class="auth-sub">Sign in to keep your data if you ever uninstall or switch phones.</div>
+    <div class="planner-edit-row" style="flex-direction:column; align-items:stretch;">
+      <input type="email" id="authEmail" placeholder="Email" style="width:100%;">
+      <input type="password" id="authPassword" placeholder="Password" style="width:100%;">
+    </div>
+    <div style="display:flex; gap:10px; margin-top:12px;">
+      <button class="export-btn" id="signInBtn" style="flex:1; color:#43D17A; border-color:rgba(67,209,122,0.35); background:rgba(67,209,122,0.12);">Sign In</button>
+      <button class="export-btn" id="signUpBtn" style="flex:1;">Create Account</button>
+    </div>
+    <button class="close-btn" id="googleBtn" style="margin-top:14px;">Continue with Google</button>
+    <div class="status" id="authStatus"></div>
+    <div class="locked-hint" id="firebaseWarning" style="display:none; margin-top:20px;">
+      Firebase isn't configured yet — this app is running in local-only mode. Data stays on this device until a Firebase project is connected.
+    </div>
+  </div>
+</div>
+
 <div class="app" id="app">
 
   <div class="topbar">
@@ -294,26 +329,9 @@
     <div class="gear-btn" id="gearBtnTop">⚙</div>
   </div>
 
-  <!-- PROFILE VIEW -->
+  <!-- PROFILE VIEW (only reachable once logged in, or in local-only mode) -->
   <div class="view" id="view-profile">
     <div class="month-title" style="margin-bottom:18px;">PROFILE</div>
-
-    <div id="profileLoggedOut">
-      <div class="month-sub" style="margin-bottom:18px;">Sign in to keep your data if you ever uninstall or switch phones.</div>
-      <div class="planner-edit-row" style="flex-direction:column; align-items:stretch;">
-        <input type="email" id="authEmail" placeholder="Email" style="width:100%;">
-        <input type="password" id="authPassword" placeholder="Password" style="width:100%;">
-      </div>
-      <div style="display:flex; gap:10px; margin-top:12px;">
-        <button class="export-btn" id="signInBtn" style="flex:1; color:#43D17A; border-color:rgba(67,209,122,0.35); background:rgba(67,209,122,0.12);">Sign In</button>
-        <button class="export-btn" id="signUpBtn" style="flex:1;">Create Account</button>
-      </div>
-      <button class="close-btn" id="googleBtn" style="margin-top:14px;">Continue with Google</button>
-      <div class="status" id="authStatus"></div>
-      <div class="locked-hint" id="firebaseWarning" style="display:none; margin-top:20px;">
-        Firebase isn't configured yet — this app is running in local-only mode. Data stays on this device until a Firebase project is connected.
-      </div>
-    </div>
 
     <div id="profileLoggedIn" style="display:none;">
       <div class="streak-hero" style="text-align:left; display:flex; align-items:center; gap:16px; padding:22px 20px;">
@@ -324,6 +342,12 @@
         </div>
       </div>
       <button class="close-btn" id="signOutBtn" style="margin-top:18px;">Sign Out</button>
+    </div>
+
+    <div id="profileLocalMode" style="display:none;">
+      <div class="locked-hint" style="margin-top:0;">
+        Firebase isn't configured — running in local-only mode. Data stays on this device until a Firebase project is connected.
+      </div>
     </div>
   </div>
 
@@ -1024,32 +1048,58 @@ document.getElementById('addPlannerBtn').addEventListener('click', async () => {
 });
 
 // ---------- AUTH / PROFILE ----------
+function showGate() {
+  document.getElementById('authGate').classList.add('show');
+  if (!window.__firebaseReady) {
+    document.getElementById('firebaseWarning').style.display = 'block';
+  }
+}
+function hideGate() {
+  document.getElementById('authGate').classList.remove('show');
+}
+
 function renderProfileUI(user) {
-  const loggedOutEl = document.getElementById('profileLoggedOut');
   const loggedInEl = document.getElementById('profileLoggedIn');
-  const warningEl = document.getElementById('firebaseWarning');
+  const localModeEl = document.getElementById('profileLocalMode');
   const sideLabel = document.getElementById('sideProfileLabel');
 
-  if (!window.__firebaseReady) {
-    warningEl.style.display = 'block';
-  }
-
   if (user) {
-    loggedOutEl.style.display = 'none';
     loggedInEl.style.display = 'block';
+    localModeEl.style.display = 'none';
     document.getElementById('profileEmail').textContent = user.email || 'Signed in';
     document.getElementById('profileAvatar').textContent = (user.email || '?')[0].toUpperCase();
     sideLabel.textContent = 'Profile ✓';
   } else {
-    loggedOutEl.style.display = 'block';
     loggedInEl.style.display = 'none';
+    localModeEl.style.display = 'block';
     sideLabel.textContent = 'Profile';
   }
 }
 
-window.onAuthReady = (user) => {
-  renderProfileUI(user);
-  if (user) syncOnLogin();
+async function enterApp(user) {
+  hideGate();
+  if (user) {
+    renderProfileUI(user);
+    await syncOnLogin(); // reloads habits/planner from cloud and re-renders active view
+  } else {
+    renderProfileUI(null);
+    habits = await loadHabits();
+    plannerBlocks = await loadPlanner();
+  }
+  switchView('home');
+}
+
+const splashMinDelay = new Promise(res => setTimeout(res, 550));
+
+window.onAuthReady = async (user) => {
+  await splashMinDelay;
+  document.getElementById('splash').classList.add('hide');
+
+  if (!window.__firebaseReady || user) {
+    await enterApp(user);
+  } else {
+    showGate();
+  }
 };
 
 function authStatusMsg(msg, isError) {
@@ -1206,14 +1256,9 @@ document.querySelectorAll('.chip').forEach(chip => {
   });
 });
 
-(async function init() {
-  habits = await loadHabits();
-  plannerBlocks = await loadPlanner();
-  await renderToday();
-  setTimeout(() => {
-    document.getElementById('splash').classList.add('hide');
-  }, 550);
-})();
+// App startup is now driven entirely by window.onAuthReady (see AUTH / PROFILE
+// section above) — it decides whether to show the login gate or go straight
+// into the Today view, and handles the splash timing either way.
 </script>
 </body>
 </html>
