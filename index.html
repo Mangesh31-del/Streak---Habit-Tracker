@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Streak — Habit Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:#0b0b0d; color:#EDEAE4; font-family:'Inter',sans-serif; overflow-x:hidden; width:100%; }
+
+  .app {
+    max-width: 720px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding: 24px 22px 60px 22px;
+    background:
+      radial-gradient(ellipse 700px 400px at 50% 0%, rgba(217,60,60,0.08), transparent 60%),
+      linear-gradient(180deg, #121214 0%, #0c0c0e 40%, #08080a 100%);
+  }
+
+  /* ---- splash ---- */
+  .splash {
+    position: fixed; inset: 0; background: #0b0b0d; z-index: 50;
+    display:flex; align-items:center; justify-content:center;
+    transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+  .splash-text { font-family:'Bebas Neue',sans-serif; font-size: 58px; letter-spacing: 5px; color:#F5F1EA; }
+  .splash-text span { color:#D93C3C; }
+  .splash.hide { opacity: 0; transform: translateY(-70px); pointer-events: none; }
+
+  /* ---- today view ---- */
+  .today-header { text-align:center; margin: 14px 0 30px 0; }
+  .today-daynum { font-family:'Bebas Neue',sans-serif; font-size: 104px; color:#F5F1EA; line-height:0.85; }
+  .today-dayname { font-family:'Bebas Neue',sans-serif; font-size: 26px; letter-spacing: 7px; color:#D93C3C; margin-top: 8px; }
+  .today-monthyear { font-size: 13px; letter-spacing: 3px; color:#A98787; text-transform:uppercase; margin-top: 6px; }
+
+  .todo-list { border-top: 1px solid rgba(237,234,228,0.08); }
+  .todo-item { display:flex; align-items:center; gap: 14px; padding: 18px 4px; border-bottom: 1px solid rgba(237,234,228,0.08); }
+  .todo-check {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink:0; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; font-size: 14px; color:#0b0b0d; font-weight:700;
+    transition: background 0.15s ease;
+  }
+  .todo-body { flex:1; }
+  .todo-name { font-size: 17px; color:#EDEAE4; transition: color 0.15s ease; }
+  .todo-name.done { color:#6E6659; text-decoration: line-through; }
+  .todo-tag { font-size: 11px; letter-spacing: 1.5px; text-transform:uppercase; color:#6E6659; margin-top: 3px; }
+
+  .locked-hint { text-align:center; font-size: 11px; color:#6E6659; letter-spacing:0.5px; margin-top: 26px; }
+
+  .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom: 20px; }
+  .menu-btn, .nav-btn {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(217,60,60,0.12); border: 1px solid rgba(217,60,60,0.3);
+    color: #E97A7A; font-size: 18px; cursor: pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .menu-btn:hover, .nav-btn:hover { background: rgba(217,60,60,0.22); }
+  .brand { font-family:'Bebas Neue',sans-serif; font-size: 28px; letter-spacing: 3px; color:#F5F1EA; }
+  .brand span { color:#D93C3C; }
+
+  /* ---- sidebar ---- */
+  .sidebar-overlay {
+    display:none; position: fixed; inset:0; background: rgba(0,0,0,0.55); z-index: 20;
+  }
+  .sidebar-overlay.open { display:block; }
+  .sidebar {
+    position: fixed; top:0; left:0; bottom:0; width: 260px;
+    background: #141416; border-right: 1px solid rgba(217,60,60,0.25);
+    transform: translateX(-100%); transition: transform 0.25s ease;
+    z-index: 21; padding: 26px 18px; display:flex; flex-direction:column;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-brand { font-family:'Bebas Neue',sans-serif; font-size: 26px; letter-spacing:3px; color:#F5F1EA; margin-bottom: 30px; }
+  .sidebar-brand span { color:#D93C3C; }
+  .side-link {
+    display:flex; align-items:center; gap: 12px; padding: 13px 12px; border-radius: 8px;
+    color:#C9BFAF; font-size: 15px; cursor:pointer; margin-bottom: 4px;
+  }
+  .side-link.active, .side-link:hover { background: rgba(217,60,60,0.14); color:#F5F1EA; }
+  .side-link .ic { width:20px; text-align:center; }
+  .side-divider { height:1px; background: rgba(237,234,228,0.08); margin: 14px 0; }
+  .side-foot { margin-top:auto; font-size: 11px; color:#6E6659; letter-spacing:0.5px; line-height:1.5; }
+
+  /* ---- views ---- */
+  .view { display:none; }
+  .view.active { display:block; }
+
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 6px; }
+  .month-title { font-family:'Bebas Neue',sans-serif; font-size: 40px; letter-spacing: 3px; color:#F5F1EA; }
+  .month-sub { font-size: 12px; letter-spacing: 2px; color:#A98787; text-transform:uppercase; margin-top:2px; }
+
+  .top-row { display:flex; justify-content:space-between; align-items:center; margin-top: 18px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; }
+  .legend-item { display:flex; align-items:center; gap:7px; font-size: 12px; color:#A98787; letter-spacing:0.5px; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .gear-btn {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: rgba(217,60,60,0.10); border: 1px solid rgba(217,60,60,0.25);
+    color: #E97A7A; font-size: 16px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    flex-shrink: 0;
+  }
+
+  .weekday-row { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:6px; margin: 16px 0 8px 0; }
+  .weekday-row div { text-align:center; font-size:11px; letter-spacing:1.5px; color:#6E6659; text-transform:uppercase; min-width:0; }
+
+  .grid { display:grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap:6px; width:100%; }
+  .cell {
+    aspect-ratio: 1/1.05; border-radius: 10px;
+    background: rgba(217,60,60,0.05); border: 1px solid rgba(217,60,60,0.12);
+    padding: 6px 2px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    position: relative; min-width: 0; overflow: hidden;
+  }
+  .cell.empty { background:transparent; border:none; }
+  .cell.today { border: 1px solid #D93C3C; box-shadow: 0 0 0 1px rgba(217,60,60,0.4); }
+  .daynum { font-size: 12px; color:#EDEAE4; font-weight:600; }
+  .splittag { font-size: 7px; letter-spacing:0.3px; color:#6E6659; text-transform:uppercase; margin-top:1px; }
+  .dots { display:flex; gap:3px; margin-top:5px; flex-wrap: wrap; justify-content:center; min-width:0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; border: 1.3px solid rgba(217,60,60,0.4); cursor: pointer; background: transparent; flex-shrink:0; }
+  .dot.locked { cursor: default; opacity: 0.6; }
+  .cell.past { opacity: 0.7; }
+  .cell.future { opacity: 0.4; }
+
+  .stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(100px,1fr)); gap: 12px; margin-top: 26px; }
+  .stat-card { background: rgba(217,60,60,0.08); border:1px solid rgba(217,60,60,0.18); border-radius: 10px; padding: 16px; text-align:center; }
+  .stat-num { font-family:'Bebas Neue',sans-serif; font-size: 34px; color:#F5F1EA; }
+  .stat-label { font-size: 11px; letter-spacing:1.5px; text-transform:uppercase; color:#A98787; margin-top:4px; }
+
+  .status { text-align:center; font-size: 12px; color:#6E6659; margin-top: 22px; letter-spacing:1px; }
+
+  /* planner */
+  .planner-block {
+    display:flex; align-items:center; gap:14px; padding: 16px 4px;
+    border-top: 1px solid rgba(237,234,228,0.08);
+  }
+  .planner-block:first-child { border-top:none; }
+  .planner-time { width: 108px; flex-shrink:0; font-size: 14px; font-weight:600; color:#E97A7A; letter-spacing:0.5px; }
+  .planner-label { flex:1; font-size: 15px; color:#EDEAE4; }
+  .planner-edit, .planner-del { color:#6E6659; font-size:16px; cursor:pointer; padding: 4px 6px; flex-shrink:0; }
+  .planner-edit:hover { color:#E97A7A; }
+  .planner-del:hover { color:#D93C3C; }
+  .add-row-btn {
+    display:block; width:100%; margin-top: 18px; background: rgba(217,60,60,0.10);
+    border: 1px dashed rgba(217,60,60,0.35); color:#E97A7A; padding: 14px; border-radius:10px;
+    font-size: 14px; letter-spacing:0.5px; cursor:pointer;
+  }
+  .planner-edit-row { display:flex; gap:8px; padding: 12px 4px; border-top: 1px solid rgba(237,234,228,0.08); flex-wrap:wrap; }
+  .planner-edit-row input {
+    background: rgba(217,60,60,0.08); border:1px solid rgba(217,60,60,0.25); border-radius:8px;
+    padding: 9px 10px; color:#EDEAE4; font-size:13px; font-family:'Inter',sans-serif;
+  }
+  .planner-edit-row input[type="time"] { width: 100px; }
+  .planner-edit-row input[type="text"] { flex:1; min-width: 120px; }
+  .planner-edit-row button { background:#D93C3C; color:#F5F1EA; border:none; border-radius:8px; padding: 0 14px; font-size:13px; cursor:pointer; }
+
+  /* streaks view */
+  .streak-hero {
+    background: linear-gradient(135deg, rgba(217,60,60,0.16), rgba(217,60,60,0.02));
+    border: 1px solid rgba(217,60,60,0.3); border-radius: 14px; padding: 30px 24px; text-align:center; margin-bottom: 22px;
+  }
+  .streak-hero .num { font-family:'Bebas Neue',sans-serif; font-size: 72px; color:#F5F1EA; line-height:1; }
+  .streak-hero .lbl { font-size: 13px; letter-spacing:2px; text-transform:uppercase; color:#E97A7A; margin-top: 6px; }
+  .streak-hero .best { font-size: 12px; color:#A98787; margin-top: 10px; }
+
+  .habit-streak-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 4px; border-top: 1px solid rgba(237,234,228,0.08);
+  }
+  .habit-streak-row:first-of-type { border-top:none; }
+  .hs-left { display:flex; align-items:center; gap:12px; }
+  .hs-dot { width:12px; height:12px; border-radius:50%; }
+  .hs-name { font-size: 15px; color:#EDEAE4; }
+  .hs-right { text-align:right; }
+  .hs-current { font-family:'Bebas Neue',sans-serif; font-size: 24px; color:#F5F1EA; }
+  .hs-best { font-size: 11px; color:#6E6659; letter-spacing:0.5px; }
+
+  /* reports view */
+  .report-controls { display:flex; gap:8px; margin-bottom: 18px; flex-wrap:wrap; }
+  .chip {
+    padding: 8px 14px; border-radius: 20px; font-size: 12px; letter-spacing:0.5px;
+    background: rgba(217,60,60,0.08); border:1px solid rgba(217,60,60,0.2); color:#A98787; cursor:pointer;
+  }
+  .chip.active { background: #D93C3C; color:#F5F1EA; border-color:#D93C3C; }
+  .chart-wrap { background: rgba(217,60,60,0.05); border:1px solid rgba(217,60,60,0.15); border-radius: 12px; padding: 18px; }
+
+  /* settings panel */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); align-items: flex-end; justify-content: center; z-index: 30; }
+  .overlay.open { display: flex; }
+  .panel { width: 100%; max-width: 720px; background: #141416; border-top: 1px solid rgba(217,60,60,0.3); border-radius: 18px 18px 0 0; padding: 24px 22px 34px 22px; max-height: 80vh; overflow-y: auto; }
+  .panel-title { font-family:'Bebas Neue',sans-serif; font-size: 24px; letter-spacing:2px; color:#F5F1EA; margin-bottom: 16px; }
+  .habit-row { display:flex; align-items:center; gap: 12px; padding: 10px 0; border-top: 1px solid rgba(237,234,228,0.08); }
+  .habit-row:first-of-type { border-top:none; }
+  .habit-swatch { width: 22px; height:22px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.2); flex-shrink:0; }
+  .habit-name { flex: 1; font-size: 15px; color:#EDEAE4; }
+  .habit-name input { width: 100%; background: transparent; border:none; color:#EDEAE4; font-size:15px; font-family:'Inter',sans-serif; padding: 4px 0; }
+  .habit-del { color:#6E6659; font-size:18px; cursor:pointer; padding:4px 8px; }
+  .habit-del:hover { color:#D93C3C; }
+  .color-row { display:flex; gap: 8px; margin: 8px 0 16px 34px; flex-wrap:wrap; }
+  .swatch-opt { width:20px; height:20px; border-radius:50%; cursor:pointer; border: 2px solid transparent; }
+  .swatch-opt.selected { border-color: #F5F1EA; }
+  .add-row { display:flex; gap:10px; margin-top: 16px; }
+  .add-row input { flex:1; background: rgba(217,60,60,0.08); border:1px solid rgba(217,60,60,0.25); border-radius: 8px; padding: 10px 12px; color:#EDEAE4; font-size:14px; font-family:'Inter',sans-serif; }
+  .add-row button { background: #D93C3C; color:#F5F1EA; border:none; border-radius:8px; padding: 0 18px; font-size: 14px; font-weight:600; cursor:pointer; letter-spacing:0.5px; }
+  .close-btn { display:block; width:100%; margin-top: 20px; background: rgba(217,60,60,0.12); border: 1px solid rgba(217,60,60,0.3); color:#E97A7A; padding: 12px; border-radius:8px; font-size: 13px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; }
+  .export-btn { display:block; width:100%; margin-top: 10px; background: rgba(67,209,122,0.12); border: 1px solid rgba(67,209,122,0.35); color:#43D17A; padding: 12px; border-radius:8px; font-size: 13px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<!-- =====================================================================
+  FIREBASE SETUP — fill this in once you've created your free project:
+  1. Go to https://console.firebase.google.com → Add project (free, no card)
+  2. Project settings (gear icon) → General → scroll to "Your apps" → Web (</>) → register app
+  3. Copy the firebaseConfig object it gives you and paste it below
+  4. Build → Authentication → Get started → enable "Email/Password" and "Google"
+  5. Build → Firestore Database → Create database → Start in production mode
+  6. Firestore → Rules tab → paste the rules from the deployment guide → Publish
+===================================================================== -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+    createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import {
+    getDatabase, ref, get, set, query, orderByKey, startAt, endAt
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  // ⬇⬇⬇ PASTE YOUR OWN firebaseConfig FROM THE FIREBASE CONSOLE HERE ⬇⬇⬇
+  // databaseURL is the one you just got from the Realtime Database page —
+  // looks like: https://streak-793c9-default-rtdb.firebaseio.com
+  const firebaseConfig = {
+    apiKey: "AIzaSyAbR6-kLi2ZZTqmqmJbymJfDsJBdY9Z2BY",
+    authDomain: "streak-793c9.firebaseapp.com",
+    databaseURL: "https://streak-793c9-default-rtdb.firebaseio.com",
+    projectId: "streak-793c9",
+    storageBucket: "streak-793c9.firebasestorage.app",
+    messagingSenderId: "512891872343",
+    appId: "1:512891872343:web:b5be8f644913a530482f12"
+  };
+  // ⬆⬆⬆ ------------------------------------------------------------ ⬆⬆⬆
+
+  const firebaseReady = firebaseConfig.apiKey !== "YOUR_API_KEY";
+  window.__firebaseReady = firebaseReady;
+
+  if (firebaseReady) {
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const rtdb = getDatabase(app);
+    window.__auth = auth;
+
+    window.__signUp = (email, pw) => createUserWithEmailAndPassword(auth, email, pw);
+    window.__signIn = (email, pw) => signInWithEmailAndPassword(auth, email, pw);
+    window.__signInGoogle = () => signInWithPopup(auth, new GoogleAuthProvider());
+    window.__signOut = () => signOut(auth);
+
+    // Realtime Database keys can't contain '.', '#', '$', '[', ']' — our
+    // storage keys only ever use letters, numbers, '-', and ':', so they're
+    // already safe to use directly as RTDB path segments.
+    window.__firestoreGet = async (key) => {
+      const snap = await get(ref(rtdb, `users/${window.currentUser.uid}/data/${key}`));
+      return snap.exists() ? { key, value: snap.val() } : null;
+    };
+    window.__firestoreSet = async (key, value) => {
+      await set(ref(rtdb, `users/${window.currentUser.uid}/data/${key}`), value);
+    };
+    window.__firestoreList = async (prefix) => {
+      const baseRef = ref(rtdb, `users/${window.currentUser.uid}/data`);
+      const snap = prefix
+        ? await get(query(baseRef, orderByKey(), startAt(prefix), endAt(prefix + '\uf8ff')))
+        : await get(baseRef);
+      if (!snap.exists()) return { keys: [] };
+      return { keys: Object.keys(snap.val()) };
+    };
+
+    onAuthStateChanged(auth, async (user) => {
+      window.currentUser = user;
+      if (window.onAuthReady) window.onAuthReady(user);
+    });
+  } else {
+    window.currentUser = null;
+    setTimeout(() => { if (window.onAuthReady) window.onAuthReady(null); }, 0);
+  }
+</script>
+
+<div class="splash" id="splash"><div class="splash-text">STREAK<span>.</span></div></div>
+
+<div class="app" id="app">
+
+  <div class="topbar">
+    <div class="menu-btn" id="menuBtn">☰</div>
+    <div class="brand">STREAK<span>.</span></div>
+    <div class="gear-btn" id="gearBtnTop">⚙</div>
+  </div>
+
+  <!-- PROFILE VIEW -->
+  <div class="view" id="view-profile">
+    <div class="month-title" style="margin-bottom:18px;">PROFILE</div>
+
+    <div id="profileLoggedOut">
+      <div class="month-sub" style="margin-bottom:18px;">Sign in to keep your data if you ever uninstall or switch phones.</div>
+      <div class="planner-edit-row" style="flex-direction:column; align-items:stretch;">
+        <input type="email" id="authEmail" placeholder="Email" style="width:100%;">
+        <input type="password" id="authPassword" placeholder="Password" style="width:100%;">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="export-btn" id="signInBtn" style="flex:1; color:#43D17A; border-color:rgba(67,209,122,0.35); background:rgba(67,209,122,0.12);">Sign In</button>
+        <button class="export-btn" id="signUpBtn" style="flex:1;">Create Account</button>
+      </div>
+      <button class="close-btn" id="googleBtn" style="margin-top:14px;">Continue with Google</button>
+      <div class="status" id="authStatus"></div>
+      <div class="locked-hint" id="firebaseWarning" style="display:none; margin-top:20px;">
+        Firebase isn't configured yet — this app is running in local-only mode. Data stays on this device until a Firebase project is connected.
+      </div>
+    </div>
+
+    <div id="profileLoggedIn" style="display:none;">
+      <div class="streak-hero" style="text-align:left; display:flex; align-items:center; gap:16px; padding:22px 20px;">
+        <div style="width:52px; height:52px; border-radius:50%; background:#D93C3C; display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue'; font-size:24px; color:#F5F1EA; flex-shrink:0;" id="profileAvatar">–</div>
+        <div>
+          <div style="font-size:16px; color:#F5F1EA;" id="profileEmail">—</div>
+          <div style="font-size:12px; color:#43D17A; margin-top:4px;">✓ Synced to cloud</div>
+        </div>
+      </div>
+      <button class="close-btn" id="signOutBtn" style="margin-top:18px;">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- TODAY VIEW (default landing) -->
+  <div class="view active" id="view-home">
+    <div class="today-header">
+      <div class="today-daynum" id="todayDayNum">—</div>
+      <div class="today-dayname" id="todayDayName">—</div>
+      <div class="today-monthyear" id="todayMonthYear">—</div>
+    </div>
+
+    <div class="todo-list" id="todoList"></div>
+    <div class="locked-hint">Only today can be checked off — yesterday's already written.</div>
+    <div class="status" id="statusMsg"></div>
+  </div>
+
+  <!-- CALENDAR VIEW (read-only history) -->
+  <div class="view" id="view-calendar">
+    <div class="header">
+      <button class="nav-btn" id="prevBtn">‹</button>
+      <div style="text-align:center;">
+        <div class="month-title" id="monthTitle">—</div>
+        <div class="month-sub">Calendar</div>
+      </div>
+      <button class="nav-btn" id="nextBtn">›</button>
+    </div>
+
+    <div class="top-row">
+      <div class="legend" id="legend"></div>
+      <div style="width:34px;"></div>
+    </div>
+
+    <div class="weekday-row">
+      <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+    </div>
+    <div class="grid" id="grid"></div>
+
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <!-- STREAKS VIEW -->
+  <div class="view" id="view-streaks">
+    <div class="month-title" style="margin-bottom:18px;">STREAKS</div>
+    <div class="streak-hero">
+      <div class="num" id="overallStreak">0</div>
+      <div class="lbl">Day Overall Streak</div>
+      <div class="best" id="overallBest">Best: 0 days</div>
+    </div>
+    <div id="habitStreakList"></div>
+  </div>
+
+  <!-- REPORTS VIEW -->
+  <div class="view" id="view-reports">
+    <div class="month-title" style="margin-bottom:18px;">REPORTS</div>
+    <div class="report-controls">
+      <div class="chip active" data-range="30">30 Days</div>
+      <div class="chip" data-range="90">90 Days</div>
+      <div class="chip" data-range="365">1 Year</div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="reportChart" height="220"></canvas>
+    </div>
+    <div class="stats" id="reportStats"></div>
+  </div>
+
+  <!-- PLANNER VIEW -->
+  <div class="view" id="view-planner">
+    <div class="month-title" style="margin-bottom:6px;">PLANNER</div>
+    <div class="month-sub" style="margin-bottom:20px;">Your daily blocks — tap to edit</div>
+    <div id="plannerList"></div>
+    <button class="add-row-btn" id="addPlannerBtn">+ Add Time Block</button>
+  </div>
+
+</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar-overlay" id="sideOverlay"></div>
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-brand">STREAK<span>.</span></div>
+  <div class="side-link active" data-view="home"><span class="ic">▦</span> Today</div>
+  <div class="side-link" data-view="profile"><span class="ic">👤</span> <span id="sideProfileLabel">Profile</span></div>
+  <div class="side-link" data-view="calendar"><span class="ic">🗓</span> Calendar</div>
+  <div class="side-link" data-view="streaks"><span class="ic">🔥</span> Streaks</div>
+  <div class="side-link" data-view="reports"><span class="ic">📈</span> Reports</div>
+  <div class="side-link" data-view="planner"><span class="ic">🗒</span> Planner</div>
+  <div class="side-divider"></div>
+  <div class="side-link" id="sideManageHabits"><span class="ic">⚙</span> Manage Tasks</div>
+  <div class="side-link" id="sideExport"><span class="ic">⬇</span> Export Data</div>
+  <div class="side-link" id="sideNotify"><span class="ic">🔔</span> Enable Reminders</div>
+  <div class="side-foot">Private &amp; local — nothing leaves this device unless you export it.</div>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div class="overlay" id="overlay">
+  <div class="panel">
+    <div class="panel-title">EDIT TASKS</div>
+    <div id="habitList"></div>
+    <div class="add-row">
+      <input type="text" id="newHabitName" placeholder="New task name…">
+      <button id="addHabitBtn">Add</button>
+    </div>
+    <button class="export-btn" id="exportBtn2">Export All Data (.json)</button>
+    <button class="close-btn" id="closeBtn">Done</button>
+  </div>
+</div>
+
+<script>
+const SPLIT = ['Rest','Push','Pull','Legs','Push','Pull','Legs'];
+const COLOR_PALETTE = ['#D93C3C','#43D17A','#7FD6C4','#4A90D9','#E8B84B','#B76BE8','#E8493D','#6EE8C7'];
+const CONFIG_KEY = 'habit-config';
+const DEFAULT_HABITS = [
+  { id:'gym', name:'Gym', color:'#D93C3C' },
+  { id:'study', name:'Deep Study', color:'#7FD6C4' },
+  { id:'fiverr', name:'Fiverr Build', color:'#43D17A' }
+];
+
+let viewDate = new Date();
+viewDate.setDate(1);
+let habits = [];
+let currentData = {};
+let allDataCache = null; // { 'YYYY-MM-DD': {habitId: bool} }
+let reportChart = null;
+let reportRange = 30;
+
+function pad(n){ return String(n).padStart(2,'0'); }
+function monthKeyOf(y,m){ return `habits:${y}-${pad(m)}`; }
+function monthKey(d) { return monthKeyOf(d.getFullYear(), d.getMonth()+1); }
+function daysInMonth(d) { return new Date(d.getFullYear(), d.getMonth()+1, 0).getDate(); }
+function uid() { return 'h' + Math.random().toString(36).slice(2,9); }
+function dateStr(y,m,day){ return `${y}-${pad(m)}-${pad(day)}`; }
+
+// ---------- STORAGE ADAPTER ----------
+// Uses Claude's window.storage when available (in-chat preview).
+// Falls back to localStorage automatically once this file is hosted
+// standalone (GitHub Pages, wrapped APK, etc.) — required for the app
+// to actually persist data outside Claude.
+const hasCloudStorage = typeof window.storage !== 'undefined';
+
+function isLoggedIn() {
+  return !hasCloudStorage && window.__firebaseReady && window.currentUser;
+}
+
+const storageAdapter = {
+  async get(key) {
+    if (hasCloudStorage) return window.storage.get(key);
+    if (isLoggedIn()) {
+      try {
+        const r = await window.__firestoreGet(key);
+        if (r) { localStorage.setItem(key, r.value); return r; }
+      } catch (e) {}
+    }
+    const raw = localStorage.getItem(key);
+    return raw ? { key, value: raw } : null;
+  },
+  async set(key, value) {
+    if (hasCloudStorage) return window.storage.set(key, value);
+    localStorage.setItem(key, value);
+    if (isLoggedIn()) {
+      try { await window.__firestoreSet(key, value); } catch (e) {}
+    }
+    return { key, value };
+  },
+  async list(prefix) {
+    if (hasCloudStorage) return window.storage.list(prefix);
+    if (isLoggedIn()) {
+      try { return await window.__firestoreList(prefix); } catch (e) {}
+    }
+    const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix));
+    return { keys };
+  }
+};
+
+// Pulls everything from Firestore into localStorage on login, or pushes
+// local guest data up if the cloud account is brand new.
+async function syncOnLogin() {
+  if (!isLoggedIn()) return;
+  try {
+    const cloudList = await window.__firestoreList('');
+    if (cloudList.keys.length === 0) {
+      // brand-new account — push whatever's local up as the seed
+      const localKeys = Object.keys(localStorage).filter(k => k === CONFIG_KEY || k === PLANNER_KEY || k.startsWith('habits:'));
+      for (const k of localKeys) {
+        await window.__firestoreSet(k, localStorage.getItem(k));
+      }
+    } else {
+      for (const k of cloudList.keys) {
+        const r = await window.__firestoreGet(k);
+        if (r) localStorage.setItem(k, r.value);
+      }
+    }
+  } catch (e) {}
+  allDataCache = null;
+  habits = await loadHabits();
+  plannerBlocks = await loadPlanner();
+  refreshActiveView();
+}
+
+async function loadHabits() {
+  try {
+    const res = await storageAdapter.get(CONFIG_KEY);
+    return res ? JSON.parse(res.value) : DEFAULT_HABITS.slice();
+  } catch (e) { return DEFAULT_HABITS.slice(); }
+}
+async function saveHabits() {
+  try { await storageAdapter.set(CONFIG_KEY, JSON.stringify(habits)); } catch (e) {}
+}
+async function loadMonthData(d) {
+  try {
+    const res = await storageAdapter.get(monthKey(d));
+    return res ? JSON.parse(res.value) : {};
+  } catch (e) { return {}; }
+}
+async function saveMonthData(d, data) {
+  try { await storageAdapter.set(monthKey(d), JSON.stringify(data)); }
+  catch (e) { document.getElementById('statusMsg').textContent = 'save failed — try again'; }
+}
+
+// Loads ALL months of data across history for streaks/reports
+async function loadAllData(forceRefresh) {
+  if (allDataCache && !forceRefresh) return allDataCache;
+  const flat = {};
+  try {
+    const listRes = await storageAdapter.list('habits:');
+    const keys = (listRes && listRes.keys) ? listRes.keys : [];
+    for (const key of keys) {
+      const m = key.match(/^habits:(\d{4})-(\d{2})$/);
+      if (!m) continue;
+      const y = parseInt(m[1]), mo = parseInt(m[2]);
+      try {
+        const res = await storageAdapter.get(key);
+        const data = res ? JSON.parse(res.value) : {};
+        Object.keys(data).forEach(day => {
+          flat[dateStr(y, mo, parseInt(day))] = data[day];
+        });
+      } catch(e) {}
+    }
+  } catch (e) {}
+  allDataCache = flat;
+  return flat;
+}
+
+function renderLegend() {
+  const legend = document.getElementById('legend');
+  legend.innerHTML = '';
+  habits.forEach(h => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `<span class="legend-dot" style="background:${h.color};"></span>${h.name}`;
+    legend.appendChild(item);
+  });
+}
+
+// ---------- TODAY (default landing view) ----------
+const DAY_NAMES = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+async function renderToday() {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth()+1, day = now.getDate();
+  const weekday = now.getDay();
+
+  document.getElementById('todayDayNum').textContent = day;
+  document.getElementById('todayDayName').textContent = DAY_NAMES[weekday];
+  document.getElementById('todayMonthYear').textContent = `${MONTH_NAMES[m-1].toUpperCase()} ${y}`;
+
+  // load just this month's data, keyed off "today's" month
+  const todayMonthDate = new Date(y, m-1, 1);
+  const monthData = await loadMonthData(todayMonthDate);
+  const dayData = monthData[day] || {};
+
+  const list = document.getElementById('todoList');
+  list.innerHTML = '';
+
+  habits.forEach(h => {
+    const on = !!dayData[h.id];
+    const row = document.createElement('div');
+    row.className = 'todo-item';
+
+    const check = document.createElement('div');
+    check.className = 'todo-check';
+    check.style.background = on ? h.color : 'transparent';
+    check.style.border = `2px solid ${h.color}`;
+    check.textContent = on ? '✓' : '';
+
+    const body = document.createElement('div');
+    body.className = 'todo-body';
+    const name = document.createElement('div');
+    name.className = 'todo-name' + (on ? ' done' : '');
+    name.textContent = h.name;
+    body.appendChild(name);
+
+    if (h.id === 'gym') {
+      const tag = document.createElement('div');
+      tag.className = 'todo-tag';
+      tag.textContent = SPLIT[weekday] === 'Rest' ? 'Rest day' : `Today: ${SPLIT[weekday]}`;
+      body.appendChild(tag);
+    }
+
+    row.appendChild(check);
+    row.appendChild(body);
+
+    row.addEventListener('click', async () => {
+      if (!monthData[day]) monthData[day] = {};
+      monthData[day][h.id] = !monthData[day][h.id];
+      const nowOn = monthData[day][h.id];
+      check.style.background = nowOn ? h.color : 'transparent';
+      check.textContent = nowOn ? '✓' : '';
+      name.classList.toggle('done', nowOn);
+      await saveMonthData(todayMonthDate, monthData);
+      allDataCache = null;
+      document.getElementById('statusMsg').textContent = 'saved';
+      setTimeout(() => { document.getElementById('statusMsg').textContent = ''; }, 900);
+    });
+
+    list.appendChild(row);
+  });
+}
+
+// ---------- CALENDAR (read-only history, only today editable) ----------
+async function renderCalendar() {
+  currentData = await loadMonthData(viewDate);
+  renderLegend();
+
+  const monthName = viewDate.toLocaleString('default', { month: 'long' });
+  document.getElementById('monthTitle').textContent = `${monthName.toUpperCase()} ${viewDate.getFullYear()}`;
+
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  const firstWeekday = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
+  const totalDays = daysInMonth(viewDate);
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === viewDate.getFullYear() && today.getMonth() === viewDate.getMonth();
+
+  for (let i=0; i<firstWeekday; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'cell empty';
+    grid.appendChild(empty);
+  }
+
+  for (let day=1; day<=totalDays; day++) {
+    const weekday = new Date(viewDate.getFullYear(), viewDate.getMonth(), day).getDay();
+    const isToday = isCurrentMonth && day === today.getDate();
+    const isFuture = new Date(viewDate.getFullYear(), viewDate.getMonth(), day) > today && !isToday;
+
+    const cell = document.createElement('div');
+    cell.className = 'cell' + (isToday ? ' today' : '') + (isFuture ? ' future' : (!isToday ? ' past' : ''));
+
+    const num = document.createElement('div');
+    num.className = 'daynum';
+    num.textContent = day;
+    cell.appendChild(num);
+
+    const tag = document.createElement('div');
+    tag.className = 'splittag';
+    tag.textContent = SPLIT[weekday];
+    cell.appendChild(tag);
+
+    const dotsWrap = document.createElement('div');
+    dotsWrap.className = 'dots';
+    const dayData = currentData[day] || {};
+
+    habits.forEach(h => {
+      const dot = document.createElement('div');
+      dot.className = 'dot' + (isToday ? '' : ' locked');
+      const on = !!dayData[h.id];
+      dot.style.background = on ? h.color : 'transparent';
+      dot.style.borderColor = on ? h.color : 'rgba(217,60,60,0.4)';
+      if (isToday) {
+        dot.addEventListener('click', async () => {
+          if (!currentData[day]) currentData[day] = {};
+          currentData[day][h.id] = !currentData[day][h.id];
+          const nowOn = currentData[day][h.id];
+          dot.style.background = nowOn ? h.color : 'transparent';
+          dot.style.borderColor = nowOn ? h.color : 'rgba(217,60,60,0.4)';
+          await saveMonthData(viewDate, currentData);
+          allDataCache = null;
+          renderStats();
+        });
+      }
+      dotsWrap.appendChild(dot);
+    });
+
+    cell.appendChild(dotsWrap);
+    grid.appendChild(cell);
+  }
+  renderStats();
+}
+
+function renderStats() {
+  const statsEl = document.getElementById('stats');
+  statsEl.innerHTML = '';
+  const totalDays = daysInMonth(viewDate);
+  habits.forEach(h => {
+    let count = 0;
+    for (let day=1; day<=totalDays; day++) {
+      if (currentData[day] && currentData[day][h.id]) count++;
+    }
+    const card = document.createElement('div');
+    card.className = 'stat-card';
+    card.innerHTML = `<div class="stat-num" style="color:${h.color};">${count}</div><div class="stat-label">${h.name}</div>`;
+    statsEl.appendChild(card);
+  });
+}
+
+// ---------- STREAKS ----------
+function toDateObj(str) {
+  const [y,m,d] = str.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+
+function computeStreaks(flatData) {
+  const dates = Object.keys(flatData).sort();
+  if (dates.length === 0) return { overallCurrent:0, overallBest:0, perHabit:{} };
+
+  // overall: a day "counts" if any habit was completed
+  const dayHasAny = {};
+  dates.forEach(ds => {
+    const day = flatData[ds];
+    dayHasAny[ds] = Object.values(day).some(v => v);
+  });
+
+  function currentStreak(fn) {
+    let streak = 0;
+    let cursor = new Date();
+    // allow today to be incomplete without breaking streak if it's still "today"
+    let checkStr = dateStr(cursor.getFullYear(), cursor.getMonth()+1, cursor.getDate());
+    if (!fn(checkStr)) {
+      cursor.setDate(cursor.getDate()-1);
+    }
+    while (true) {
+      const ds = dateStr(cursor.getFullYear(), cursor.getMonth()+1, cursor.getDate());
+      if (fn(ds)) { streak++; cursor.setDate(cursor.getDate()-1); }
+      else break;
+    }
+    return streak;
+  }
+
+  function bestStreak(fn) {
+    let best = 0, run = 0;
+    let cursor = toDateObj(dates[0]);
+    const last = toDateObj(dates[dates.length-1]);
+    while (cursor <= last) {
+      const ds = dateStr(cursor.getFullYear(), cursor.getMonth()+1, cursor.getDate());
+      if (fn(ds)) { run++; best = Math.max(best, run); }
+      else run = 0;
+      cursor.setDate(cursor.getDate()+1);
+    }
+    return best;
+  }
+
+  const overallCurrent = currentStreak(ds => !!dayHasAny[ds]);
+  const overallBest = bestStreak(ds => !!dayHasAny[ds]);
+
+  const perHabit = {};
+  habits.forEach(h => {
+    const fn = ds => flatData[ds] && flatData[ds][h.id];
+    perHabit[h.id] = {
+      current: currentStreak(fn),
+      best: bestStreak(fn)
+    };
+  });
+
+  return { overallCurrent, overallBest, perHabit };
+}
+
+async function renderStreaks() {
+  const flat = await loadAllData();
+  const { overallCurrent, overallBest, perHabit } = computeStreaks(flat);
+
+  document.getElementById('overallStreak').textContent = overallCurrent;
+  document.getElementById('overallBest').textContent = `Best: ${overallBest} days`;
+
+  const list = document.getElementById('habitStreakList');
+  list.innerHTML = '';
+  habits.forEach(h => {
+    const s = perHabit[h.id] || { current:0, best:0 };
+    const row = document.createElement('div');
+    row.className = 'habit-streak-row';
+    row.innerHTML = `
+      <div class="hs-left">
+        <div class="hs-dot" style="background:${h.color};"></div>
+        <div class="hs-name">${h.name}</div>
+      </div>
+      <div class="hs-right">
+        <div class="hs-current">${s.current}🔥</div>
+        <div class="hs-best">Best: ${s.best}</div>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+// ---------- REPORTS ----------
+async function renderReports() {
+  const flat = await loadAllData();
+  const today = new Date();
+  const labels = [];
+  const dataPoints = [];
+  let totalCompleted = 0;
+  let activeDays = 0;
+
+  for (let i = reportRange-1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(today.getDate() - i);
+    const ds = dateStr(d.getFullYear(), d.getMonth()+1, d.getDate());
+    const dayData = flat[ds] || {};
+    const count = Object.values(dayData).filter(Boolean).length;
+    labels.push(`${d.getDate()}/${d.getMonth()+1}`);
+    dataPoints.push(count);
+    totalCompleted += count;
+    if (count > 0) activeDays++;
+  }
+
+  const ctx = document.getElementById('reportChart').getContext('2d');
+  if (reportChart) reportChart.destroy();
+  reportChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Tasks completed',
+        data: dataPoints,
+        borderColor: '#D93C3C',
+        backgroundColor: 'rgba(217,60,60,0.15)',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 2,
+        pointBackgroundColor: '#D93C3C'
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display:false } },
+      scales: {
+        x: { ticks: { color:'#6E6659', maxTicksLimit: 8 }, grid: { color:'rgba(237,234,228,0.05)' } },
+        y: { ticks: { color:'#6E6659', stepSize:1 }, grid: { color:'rgba(237,234,228,0.05)' }, beginAtZero:true }
+      }
+    }
+  });
+
+  const statsEl = document.getElementById('reportStats');
+  statsEl.innerHTML = `
+    <div class="stat-card"><div class="stat-num">${totalCompleted}</div><div class="stat-label">Total Completed</div></div>
+    <div class="stat-card"><div class="stat-num">${activeDays}</div><div class="stat-label">Active Days</div></div>
+    <div class="stat-card"><div class="stat-num">${(totalCompleted/reportRange).toFixed(1)}</div><div class="stat-label">Avg / Day</div></div>
+  `;
+}
+
+// ---------- SETTINGS PANEL ----------
+function renderHabitPanel() {
+  const list = document.getElementById('habitList');
+  list.innerHTML = '';
+  habits.forEach((h, idx) => {
+    const row = document.createElement('div');
+    row.className = 'habit-row';
+    const swatch = document.createElement('div');
+    swatch.className = 'habit-swatch';
+    swatch.style.background = h.color;
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'habit-name';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = h.name;
+    input.addEventListener('change', async () => {
+      h.name = input.value.trim() || h.name;
+      await saveHabits();
+      refreshActiveView(); renderStreaks();
+    });
+    nameWrap.appendChild(input);
+    const del = document.createElement('div');
+    del.className = 'habit-del';
+    del.textContent = '✕';
+    del.addEventListener('click', async () => {
+      habits.splice(idx, 1);
+      await saveHabits();
+      renderHabitPanel(); refreshActiveView(); renderStreaks();
+    });
+    row.appendChild(swatch); row.appendChild(nameWrap); row.appendChild(del);
+    list.appendChild(row);
+
+    const colorRow = document.createElement('div');
+    colorRow.className = 'color-row';
+    COLOR_PALETTE.forEach(c => {
+      const opt = document.createElement('div');
+      opt.className = 'swatch-opt' + (c.toLowerCase() === h.color.toLowerCase() ? ' selected' : '');
+      opt.style.background = c;
+      opt.addEventListener('click', async () => {
+        h.color = c;
+        await saveHabits();
+        renderHabitPanel(); refreshActiveView(); renderStreaks();
+      });
+      colorRow.appendChild(opt);
+    });
+    list.appendChild(colorRow);
+  });
+}
+
+async function exportData() {
+  const flat = await loadAllData(true);
+  const payload = { habits, data: flat, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `streak-backup-${dateStr(new Date().getFullYear(), new Date().getMonth()+1, new Date().getDate())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------- PLANNER ----------
+const PLANNER_KEY = 'planner-blocks';
+const DEFAULT_PLANNER = [
+  { id:'p1', time:'06:00', label:'Wake, freshen up' },
+  { id:'p2', time:'06:20', label:'Deep study block' },
+  { id:'p3', time:'08:00', label:'Breakfast + get ready' },
+  { id:'p4', time:'08:30', label:'Commute to college' },
+  { id:'p5', time:'09:30', label:'College' },
+  { id:'p6', time:'17:30', label:'Commute back' },
+  { id:'p7', time:'18:30', label:'Gym — PPL split' },
+  { id:'p8', time:'20:30', label:'Dinner' },
+  { id:'p9', time:'21:00', label:'Fiverr build / study' },
+  { id:'p10', time:'22:45', label:'Wind down' },
+  { id:'p11', time:'23:00', label:'Sleep' }
+];
+let plannerBlocks = [];
+let editingBlockId = null;
+
+async function loadPlanner() {
+  try {
+    const res = await storageAdapter.get(PLANNER_KEY);
+    return res ? JSON.parse(res.value) : DEFAULT_PLANNER.slice();
+  } catch (e) { return DEFAULT_PLANNER.slice(); }
+}
+async function savePlanner() {
+  try { await storageAdapter.set(PLANNER_KEY, JSON.stringify(plannerBlocks)); } catch (e) {}
+}
+function fmtTime(t) {
+  const [h,m] = t.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2,'0')} ${period}`;
+}
+
+function renderPlanner() {
+  const list = document.getElementById('plannerList');
+  list.innerHTML = '';
+  const sorted = [...plannerBlocks].sort((a,b) => a.time.localeCompare(b.time));
+
+  sorted.forEach(block => {
+    if (editingBlockId === block.id) {
+      const row = document.createElement('div');
+      row.className = 'planner-edit-row';
+      row.innerHTML = `
+        <input type="time" value="${block.time}" id="edit-time-${block.id}">
+        <input type="text" value="${block.label}" id="edit-label-${block.id}">
+        <button id="save-${block.id}">Save</button>
+      `;
+      list.appendChild(row);
+      row.querySelector(`#save-${block.id}`).addEventListener('click', async () => {
+        block.time = row.querySelector(`#edit-time-${block.id}`).value || block.time;
+        block.label = row.querySelector(`#edit-label-${block.id}`).value.trim() || block.label;
+        editingBlockId = null;
+        await savePlanner();
+        renderPlanner();
+      });
+      return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'planner-block';
+    row.innerHTML = `
+      <div class="planner-time">${fmtTime(block.time)}</div>
+      <div class="planner-label">${block.label}</div>
+      <div class="planner-edit" data-id="${block.id}">✎</div>
+      <div class="planner-del" data-id="${block.id}">✕</div>
+    `;
+    row.querySelector('.planner-edit').addEventListener('click', () => {
+      editingBlockId = block.id;
+      renderPlanner();
+    });
+    row.querySelector('.planner-del').addEventListener('click', async () => {
+      plannerBlocks = plannerBlocks.filter(b => b.id !== block.id);
+      await savePlanner();
+      renderPlanner();
+    });
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('addPlannerBtn').addEventListener('click', async () => {
+  const id = 'p' + Math.random().toString(36).slice(2,9);
+  plannerBlocks.push({ id, time: '12:00', label: 'New block' });
+  editingBlockId = id;
+  await savePlanner();
+  renderPlanner();
+});
+
+// ---------- AUTH / PROFILE ----------
+function renderProfileUI(user) {
+  const loggedOutEl = document.getElementById('profileLoggedOut');
+  const loggedInEl = document.getElementById('profileLoggedIn');
+  const warningEl = document.getElementById('firebaseWarning');
+  const sideLabel = document.getElementById('sideProfileLabel');
+
+  if (!window.__firebaseReady) {
+    warningEl.style.display = 'block';
+  }
+
+  if (user) {
+    loggedOutEl.style.display = 'none';
+    loggedInEl.style.display = 'block';
+    document.getElementById('profileEmail').textContent = user.email || 'Signed in';
+    document.getElementById('profileAvatar').textContent = (user.email || '?')[0].toUpperCase();
+    sideLabel.textContent = 'Profile ✓';
+  } else {
+    loggedOutEl.style.display = 'block';
+    loggedInEl.style.display = 'none';
+    sideLabel.textContent = 'Profile';
+  }
+}
+
+window.onAuthReady = (user) => {
+  renderProfileUI(user);
+  if (user) syncOnLogin();
+};
+
+function authStatusMsg(msg, isError) {
+  const el = document.getElementById('authStatus');
+  el.textContent = msg;
+  el.style.color = isError ? '#D93C3C' : '#43D17A';
+}
+
+document.getElementById('signInBtn').addEventListener('click', async () => {
+  if (!window.__firebaseReady) { authStatusMsg('Connect Firebase first — see setup notes.', true); return; }
+  const email = document.getElementById('authEmail').value.trim();
+  const pw = document.getElementById('authPassword').value;
+  if (!email || !pw) { authStatusMsg('Enter email and password.', true); return; }
+  try {
+    await window.__signIn(email, pw);
+    authStatusMsg('Signed in.');
+  } catch (e) { authStatusMsg(e.message.replace('Firebase: ',''), true); }
+});
+
+document.getElementById('signUpBtn').addEventListener('click', async () => {
+  if (!window.__firebaseReady) { authStatusMsg('Connect Firebase first — see setup notes.', true); return; }
+  const email = document.getElementById('authEmail').value.trim();
+  const pw = document.getElementById('authPassword').value;
+  if (!email || !pw) { authStatusMsg('Enter email and password.', true); return; }
+  if (pw.length < 6) { authStatusMsg('Password needs 6+ characters.', true); return; }
+  try {
+    await window.__signUp(email, pw);
+    authStatusMsg('Account created — signed in.');
+  } catch (e) { authStatusMsg(e.message.replace('Firebase: ',''), true); }
+});
+
+document.getElementById('googleBtn').addEventListener('click', async () => {
+  if (!window.__firebaseReady) { authStatusMsg('Connect Firebase first — see setup notes.', true); return; }
+  try {
+    await window.__signInGoogle();
+    authStatusMsg('Signed in.');
+  } catch (e) { authStatusMsg(e.message.replace('Firebase: ',''), true); }
+});
+
+document.getElementById('signOutBtn').addEventListener('click', async () => {
+  if (window.__firebaseReady) await window.__signOut();
+});
+
+// ---------- NAV ----------
+function switchView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  document.querySelectorAll('.side-link[data-view]').forEach(l => l.classList.toggle('active', l.dataset.view === name));
+  closeSidebar();
+  if (name === 'home') renderToday();
+  if (name === 'calendar') { viewDate = new Date(); viewDate.setDate(1); renderCalendar(); }
+  if (name === 'streaks') renderStreaks();
+  if (name === 'reports') renderReports();
+  if (name === 'planner') renderPlanner();
+  if (name === 'profile') renderProfileUI(window.currentUser);
+}
+
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sideOverlay').classList.add('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sideOverlay').classList.remove('open');
+}
+
+document.getElementById('menuBtn').addEventListener('click', openSidebar);
+document.getElementById('sideOverlay').addEventListener('click', closeSidebar);
+document.querySelectorAll('.side-link[data-view]').forEach(l => {
+  l.addEventListener('click', () => switchView(l.dataset.view));
+});
+document.getElementById('sideManageHabits').addEventListener('click', () => {
+  closeSidebar();
+  renderHabitPanel();
+  document.getElementById('overlay').classList.add('open');
+});
+document.getElementById('sideExport').addEventListener('click', () => {
+  closeSidebar();
+  exportData();
+});
+document.getElementById('sideNotify').addEventListener('click', async () => {
+  closeSidebar();
+  if (!('Notification' in window)) {
+    alert('Notifications aren\'t supported in this browser.');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    localStorage.setItem('streak-reminders-enabled', 'true');
+    new Notification('Streak reminders on', { body: 'You\'ll get a nudge if today\'s tasks are still open in the evening.' });
+    startReminderWatcher();
+  } else {
+    alert('Notifications blocked — you can re-enable them in your browser/site settings any time.');
+  }
+});
+
+// Best-effort reminder: checks once an hour WHILE THE APP IS OPEN whether
+// it's past 8pm and today's tasks aren't all done yet. This is a real
+// limitation of browser-based apps without a push server — it can't wake
+// up in the background when the app/browser is fully closed. True
+// background push needs a server (e.g. Firebase Cloud Messaging).
+function startReminderWatcher() {
+  if (window.__reminderInterval) return;
+  window.__reminderInterval = setInterval(async () => {
+    if (Notification.permission !== 'granted') return;
+    const now = new Date();
+    if (now.getHours() < 20) return;
+    const y = now.getFullYear(), m = now.getMonth()+1, day = now.getDate();
+    const monthData = await loadMonthData(new Date(y, m-1, 1));
+    const dayData = monthData[day] || {};
+    const allDone = habits.length > 0 && habits.every(h => dayData[h.id]);
+    if (!allDone) {
+      new Notification('Streak', { body: 'Still a few tasks open today — quick check-in?' });
+    }
+  }, 60 * 60 * 1000);
+}
+if (localStorage.getItem('streak-reminders-enabled') === 'true' && 'Notification' in window && Notification.permission === 'granted') {
+  startReminderWatcher();
+}
+document.getElementById('exportBtn2').addEventListener('click', exportData);
+
+document.getElementById('prevBtn').addEventListener('click', () => { viewDate.setMonth(viewDate.getMonth()-1); renderCalendar(); });
+document.getElementById('nextBtn').addEventListener('click', () => { viewDate.setMonth(viewDate.getMonth()+1); renderCalendar(); });
+document.getElementById('gearBtnTop').addEventListener('click', () => { renderHabitPanel(); document.getElementById('overlay').classList.add('open'); });
+
+function refreshActiveView() {
+  const active = document.querySelector('.view.active');
+  if (!active) return;
+  if (active.id === 'view-home') renderToday();
+  if (active.id === 'view-calendar') renderCalendar();
+  if (active.id === 'view-streaks') renderStreaks();
+}
+document.getElementById('closeBtn').addEventListener('click', () => { document.getElementById('overlay').classList.remove('open'); });
+document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') document.getElementById('overlay').classList.remove('open'); });
+
+document.getElementById('addHabitBtn').addEventListener('click', async () => {
+  const input = document.getElementById('newHabitName');
+  const name = input.value.trim();
+  if (!name) return;
+  const usedColors = habits.map(h => h.color);
+  const nextColor = COLOR_PALETTE.find(c => !usedColors.includes(c)) || COLOR_PALETTE[habits.length % COLOR_PALETTE.length];
+  habits.push({ id: uid(), name, color: nextColor });
+  input.value = '';
+  await saveHabits();
+  renderHabitPanel(); refreshActiveView();
+});
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    reportRange = parseInt(chip.dataset.range);
+    renderReports();
+  });
+});
+
+(async function init() {
+  habits = await loadHabits();
+  plannerBlocks = await loadPlanner();
+  await renderToday();
+  setTimeout(() => {
+    document.getElementById('splash').classList.add('hide');
+  }, 550);
+})();
+</script>
+</body>
+</html>
