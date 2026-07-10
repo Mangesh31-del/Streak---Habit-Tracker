@@ -233,14 +233,14 @@
   6. Firestore → Rules tab → paste the rules from the deployment guide → Publish
 ===================================================================== -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { initializeApp } from "./firebase-vendor/firebase-app.js";
   import {
     getAuth, onAuthStateChanged, signInWithEmailAndPassword,
     createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  } from "./firebase-vendor/firebase-auth.js";
   import {
     getDatabase, ref, get, set, query, orderByKey, startAt, endAt
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  } from "./firebase-vendor/firebase-database.js";
 
   // ⬇⬇⬇ PASTE YOUR OWN firebaseConfig FROM THE FIREBASE CONSOLE HERE ⬇⬇⬇
   // databaseURL is the one you just got from the Realtime Database page —
@@ -1092,6 +1092,8 @@ async function enterApp(user) {
 const splashMinDelay = new Promise(res => setTimeout(res, 550));
 
 window.onAuthReady = async (user) => {
+  if (window.__authReadyFired) return; // guard against double-entry from the failsafe below
+  window.__authReadyFired = true;
   await splashMinDelay;
   document.getElementById('splash').classList.add('hide');
 
@@ -1101,6 +1103,20 @@ window.onAuthReady = async (user) => {
     showGate();
   }
 };
+
+// FAILSAFE: if Firebase fails to initialize for any reason — slow network,
+// a misconfigured project, etc. — window.onAuthReady would otherwise never
+// fire and the splash screen would hang forever. Force entry into
+// local-only mode after 4 seconds if nothing has happened yet, so the app
+// degrades gracefully instead of getting stuck. (The SDK itself is now
+// self-hosted alongside this file, not loaded from gstatic.com, so this
+// is a pure safety net rather than an expected failure path.)
+setTimeout(() => {
+  if (!window.__authReadyFired) {
+    window.__firebaseReady = false;
+    window.onAuthReady(null);
+  }
+}, 4000);
 
 function authStatusMsg(msg, isError) {
   const el = document.getElementById('authStatus');
